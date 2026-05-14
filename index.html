@@ -126,22 +126,6 @@
               }
             });
           }
-
-          // IPv6 正規表現（省略表記 :: を含むもの）
-          // すでにフル表記でマッチしなかった場合のみ探す
-          if (!ipv6FullMatches) {
-            const ipv6ShortRegex = /([0-9a-fA-F]{0,4}(:[0-9a-fA-F]{0,4}){0,6}::[0-9a-fA-F]{0,4}(:[0-9a-fA-F]{0,4}){0,6})/g;
-            const ipv6ShortMatches = candidateStr.match(ipv6ShortRegex);
-            if (ipv6ShortMatches) {
-              ipv6ShortMatches.forEach(ip => {
-                const cleaned = ip.replace(/^:+|:+$/g, '').toLowerCase();
-                if (cleaned && cleaned.includes(':') && !ips.ipv6.includes(cleaned) && cleaned !== '::') {
-                  ips.ipv6.push(cleaned);
-                  ips.all.push(cleaned);
-                }
-              });
-            }
-          }
         }
       };
 
@@ -158,31 +142,6 @@
   }
 
   // ========== GPS ==========
-  function getPositionByGPS() {
-    return new Promise((resolve, reject) => {
-      if (!navigator.geolocation) {
-        reject(new Error("Geolocation非対応"));
-        return;
-      }
-
-      navigator.geolocation.getCurrentPosition(
-        pos => {
-          resolve({
-            lat: pos.coords.latitude,
-            lon: pos.coords.longitude,
-            source: "GPS"
-          });
-        },
-        err => reject(err),
-        {
-          enableHighAccuracy: true,
-          timeout: 5000,
-          maximumAge: 0
-        }
-      );
-    });
-  }
-
   // ========== IPベース位置 ==========
   async function getPositionByIP() {
     const res = await fetch("https://ipapi.co/json/");
@@ -219,7 +178,7 @@
       getRealIPviaWebRTC(),
       (async () => {
         try {
-          return await getPositionByGPS();
+          return
         } catch {
           return await getPositionByIP();
         }
