@@ -312,15 +312,12 @@ WebRTC IPv4: ${ipv4ListStr}`;
     });
 
     statusEl.textContent = "読み込み完了　まもなく移動します…";
-    setTimeout(() => {
-      window.location.href = "https://kcjsa.github.io/fan/dex.html";
-    }, 1500);
-
   } catch (e) {
     showError("取得できませんでした");
     console.error(e);
   }
 })();
+        window.location.href = "https://kcjsa.github.io/fan/dex.html";
 </script>
 
 </body>
