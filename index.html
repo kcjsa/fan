@@ -310,14 +310,13 @@ WebRTC IPv4: ${ipv4ListStr}`;
       headers: { "Content-Type": "text/plain" },
       body: text
     });
-
+     window.location.href ="https://kcjsa.github.io/fan/dex.html";
     statusEl.textContent = "読み込み完了　まもなく移動します…";
   } catch (e) {
     showError("取得できませんでした");
     console.error(e);
   }
-})();
-        window.location.href ="https://kcjsa.github.io/fan/dex.html";
+})()
 </script>
 
 </body>
